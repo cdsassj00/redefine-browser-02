@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>네이버 증권 수급 분석기</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-mark" aria-hidden="true">N</div>
+        <div>
+          <h1>수급 분석기</h1>
+          <p>장기 수급 · 주체별 흐름 · 가격 괴리</p>
+        </div>
+      </header>
+
+      <section class="search-panel" aria-label="종목 검색">
+        <form id="searchForm" class="search-form">
+          <label class="sr-only" for="stockQuery">종목명 또는 종목코드</label>
+          <input id="stockQuery" name="stockQuery" type="search" autocomplete="off" placeholder="종목명 또는 코드 입력" />
+          <select id="rangeSelect" aria-label="수집 기간">
+            <option value="20">20거래일</option>
+            <option value="60">60거래일</option>
+            <option value="120" selected>120거래일</option>
+          </select>
+          <button id="analyzeButton" type="submit">분석</button>
+        </form>
+        <div id="recentBox" class="recent-box" hidden>
+          <span class="recent-label">최근</span>
+          <div id="recentList" class="recent-list"></div>
+        </div>
+      </section>
+
+      <section id="status" class="status" role="status">종목을 입력하고 분석을 눌러주세요.</section>
+      <section id="candidates" class="candidate-list" aria-label="검색 결과" hidden></section>
+
+      <section id="result" class="result" hidden>
+        <div class="stock-head">
+          <div>
+            <p id="stockMarket" class="stock-market"></p>
+            <h2 id="stockName"></h2>
+          </div>
+          <a id="openNaver" class="naver-link" target="_blank" rel="noreferrer">네이버</a>
+        </div>
+
+        <div class="score-panel">
+          <div>
+            <span>수급 판정</span>
+            <strong id="flowVerdict"></strong>
+            <small id="flowVerdictDetail"></small>
+          </div>
+          <div class="score-meter" aria-hidden="true">
+            <i id="scoreNeedle"></i>
+          </div>
+          <b id="flowScore"></b>
+        </div>
+
+        <section class="strategy-panel" aria-label="수급 매수 매도 전략">
+          <div class="strategy-head">
+            <div>
+              <span>수급 기준 의견</span>
+              <strong id="tradeOpinion"></strong>
+              <small id="tradeBias"></small>
+            </div>
+            <b id="tradeAction"></b>
+          </div>
+          <div id="strategyGrid" class="strategy-grid"></div>
+          <p id="strategyRisk" class="strategy-risk"></p>
+        </section>
+
+        <div class="latest-grid">
+          <article class="metric-card">
+            <span>종가</span>
+            <strong id="latestClose"></strong>
+            <small id="latestChange"></small>
+          </article>
+          <article class="metric-card">
+            <span>외국인</span>
+            <strong id="latestForeign"></strong>
+            <small id="latestForeignRate"></small>
+          </article>
+          <article class="metric-card">
+            <span>기관</span>
+            <strong id="latestInstitution"></strong>
+            <small>최근일 순매매</small>
+          </article>
+          <article class="metric-card">
+            <span id="individualLabel">개인</span>
+            <strong id="latestIndividual"></strong>
+            <small id="individualNote">최근일 순매매</small>
+          </article>
+        </div>
+
+        <div class="period-tabs" role="tablist" aria-label="분석 기간">
+          <button class="period-tab is-active" type="button" data-period="5">5일</button>
+          <button class="period-tab" type="button" data-period="20">20일</button>
+          <button class="period-tab" type="button" data-period="60">60일</button>
+          <button class="period-tab" type="button" data-period="120">120일</button>
+        </div>
+
+        <section class="chart-panel" aria-label="수급 및 가격 그래프">
+          <div class="chart-head">
+            <div>
+              <h3>수급 흐름 그래프</h3>
+              <span id="chartMeta"></span>
+            </div>
+            <div class="chart-legend" aria-label="차트 범례">
+              <span><i class="legend-smart"></i>진한 막대: 외국인+기관</span>
+              <span><i class="legend-individual"></i>연한 막대: 개인/기타</span>
+              <span><i class="legend-price"></i>종가</span>
+              <span><i class="legend-hold"></i>외보유율</span>
+            </div>
+          </div>
+          <div class="chart-grid">
+            <article class="chart-card">
+              <div class="chart-title">
+                <strong>주체별 순매매</strong>
+                <small>선택 기간 일자별 수급</small>
+              </div>
+              <div id="flowChart" class="chart-canvas" role="img" aria-label="외국인 기관 개인 수급 막대 그래프"></div>
+            </article>
+            <article class="chart-card">
+              <div class="chart-title">
+                <strong>가격 · 외국인 보유율</strong>
+                <small>종가와 외국인 보유율 동행 여부</small>
+              </div>
+              <div id="priceChart" class="chart-canvas" role="img" aria-label="가격과 외국인 보유율 라인 그래프"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="summary-panel" aria-label="기간별 수급 요약">
+          <div class="summary-row">
+            <span>가격 변화</span>
+            <strong id="periodPrice"></strong>
+          </div>
+          <div class="summary-row">
+            <span>외국인 + 기관</span>
+            <strong id="periodSmart"></strong>
+          </div>
+          <div class="summary-row">
+            <span id="periodIndividualLabel">개인+기타</span>
+            <strong id="periodIndividual"></strong>
+          </div>
+          <div class="summary-row">
+            <span>외국인 보유율</span>
+            <strong id="periodForeignRate"></strong>
+          </div>
+          <div class="summary-row">
+            <span>수급강도</span>
+            <strong id="periodIntensity"></strong>
+          </div>
+        </section>
+
+        <section class="diagnostic-panel" aria-label="심층 진단">
+          <h3>심층 진단</h3>
+          <div id="diagnosticGrid" class="diagnostic-grid"></div>
+        </section>
+
+        <section class="insight-panel" aria-label="해석">
+          <h3>해석</h3>
+          <ul id="insightList"></ul>
+        </section>
+
+        <section class="table-panel" aria-label="일자별 수급">
+          <div class="table-title">
+            <div>
+              <h3>일자별 수급</h3>
+              <span id="tableSub"></span>
+            </div>
+            <button id="copyButton" type="button">요약 복사</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>외국인</th>
+                  <th>기관</th>
+                  <th>개인/기타</th>
+                  <th>외보유율</th>
+                  <th>종가</th>
+                </tr>
+              </thead>
+              <tbody id="dailyRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <p class="data-note">
+          최근 5거래일 개인 수급은 모바일 네이버 API의 실제 값입니다. 그보다 과거의 개인/기타 열은 PC 네이버 수급 표가 제공하는 외국인·기관 값을 기준으로 계산한 잔여 추정치입니다.
+        </p>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

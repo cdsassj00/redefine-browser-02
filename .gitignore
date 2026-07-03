@@ -1,0 +1,10 @@
+.agents/
+.codex/
+output/
+
+*.log
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+
