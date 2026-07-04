@@ -9,9 +9,11 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path -LiteralPath "."
 $out4x5 = Join-Path $root $OutputRoot
 $out1x1 = Join-Path $out4x5 "safe-crop-1x1"
+$out3x4 = Join-Path $out4x5 "grid-preview-3x4"
 
 New-Item -ItemType Directory -Force -Path $out4x5 | Out-Null
 New-Item -ItemType Directory -Force -Path $out1x1 | Out-Null
+New-Item -ItemType Directory -Force -Path $out3x4 | Out-Null
 
 $script:FontCollection = [System.Drawing.Text.PrivateFontCollection]::new()
 foreach ($fontPath in @(
@@ -122,23 +124,23 @@ function Draw-Background($g, $card) {
   }
   $gridPen.Dispose()
 
-  Fill-Round $g (Color-Hex "#FCFDF9") 64 156 952 1038 8
-  Stroke-Round $g (Color-Alpha 50 "#0F172A") 64 156 952 1038 8 1
-  Fill-Rect $g $card.Accent 64 156 8 1038
+  Fill-Round $g (Color-Hex "#FCFDF9") 92 156 896 1038 8
+  Stroke-Round $g (Color-Alpha 50 "#0F172A") 92 156 896 1038 8 1
+  Fill-Rect $g $card.Accent 92 156 7 1038
 }
 
 function Draw-Header($g, $card) {
-  Fill-Round $g (Color-Hex $card.AccentSoft) 96 188 104 56 8
-  Draw-Text $g "$($card.No)/05" 96 198 104 36 (Font-Sans 26 "Bold") $card.Accent "Center"
-  Draw-Text $g "국내증시 수급분석기" 226 196 370 36 (Font-Sans 25 "Bold") $card.Ink
-  Draw-Text $g "REDEFINE BROWSER 02" 706 197 258 34 (Font-Sans 18 "Regular") $card.Muted "Far"
-  Draw-Line $g $card.Line 96 274 984 274 2
+  Fill-Round $g (Color-Hex $card.AccentSoft) 150 188 104 56 8
+  Draw-Text $g "$($card.No)/05" 150 198 104 36 (Font-Sans 26 "Bold") $card.Accent "Center"
+  Draw-Text $g "국내증시 수급분석기" 282 196 350 36 (Font-Sans 25 "Bold") $card.Ink
+  Draw-Text $g "REDEFINE BROWSER 02" 702 197 228 34 (Font-Sans 17 "Regular") $card.Muted "Far"
+  Draw-Line $g $card.Line 150 274 930 274 2
 }
 
 function Draw-Title($g, $card, [float]$y, [string[]]$title, [float]$size = 72, [float]$lineHeight = 86) {
-  Draw-Lines $g $title 96 $y 850 $lineHeight (Font-Sans $size "Bold") $card.Ink
+  Draw-Lines $g $title 150 $y 760 $lineHeight (Font-Sans $size "Bold") $card.Ink
   $afterY = $y + ($title.Count * $lineHeight) + 8
-  Draw-Line $g $card.Accent 96 $afterY 196 $afterY 7
+  Draw-Line $g $card.Accent 150 $afterY 250 $afterY 7
 }
 
 function Draw-BrowserPanel($g, $card, [float]$x, [float]$y, [float]$w, [float]$h) {
@@ -259,11 +261,11 @@ function Draw-StepRail($g, $card, [float]$x, [float]$y) {
 }
 
 function Draw-LinkBox($g, $card, [string]$label, [string]$url, [float]$x, [float]$y, [string]$accent) {
-  Fill-Round $g (Color-Hex "#FFFFFF") $x $y 856 126 8
-  Stroke-Round $g (Color-Hex $card.Line) $x $y 856 126 8 2
+  Fill-Round $g (Color-Hex "#FFFFFF") $x $y 740 126 8
+  Stroke-Round $g (Color-Hex $card.Line) $x $y 740 126 8 2
   Fill-Rect $g $accent $x $y 8 126
   Draw-Text $g $label ($x + 34) ($y + 23) 180 28 (Font-Sans 21 "Bold") $accent
-  Draw-Text $g $url ($x + 34) ($y + 60) 770 44 (Font-Sans 31 "Bold") $card.Ink
+  Draw-Text $g $url ($x + 34) ($y + 62) 660 40 (Font-Sans 27 "Bold") $card.Ink
 }
 
 function Draw-Card([hashtable]$card, [string]$path) {
@@ -278,45 +280,45 @@ function Draw-Card([hashtable]$card, [string]$path) {
 
   switch ($card.Mode) {
     "cover" {
-      Draw-Text $g "NAVER FINANCE DATA TOOL" 96 318 520 28 (Font-Sans 18 "Bold") $card.Accent
-      Draw-Title $g $card 360 $card.Title 78 92
-      Draw-Text $g "120거래일 수급을 읽는 Chrome 확장프로그램" 96 560 770 44 (Font-Sans 30 "Regular") $card.Muted
-      Draw-BrowserPanel $g $card 112 675 770 340
-      Draw-Text $g "GitHub 공개 · CDSA.kr" 112 1082 500 34 (Font-Sans 24 "Bold") $card.Ink
-      Draw-Text $g "외국인 · 기관 · 개인/기타" 706 1082 250 34 (Font-Sans 22 "Regular") $card.Muted "Far"
+      Draw-Text $g "NAVER FINANCE DATA TOOL" 150 318 520 28 (Font-Sans 18 "Bold") $card.Accent
+      Draw-Title $g $card 360 $card.Title 72 86
+      Draw-Text $g "120거래일 수급을 읽는 Chrome 확장프로그램" 150 548 720 44 (Font-Sans 28 "Regular") $card.Muted
+      Draw-BrowserPanel $g $card 150 668 740 340
+      Draw-Text $g "GitHub 공개 · CDSA.kr" 150 1082 420 34 (Font-Sans 24 "Bold") $card.Ink
+      Draw-Text $g "외국인·기관·개인" 660 1082 230 34 (Font-Sans 20 "Regular") $card.Muted "Far"
     }
     "why" {
       Draw-Title $g $card 330 $card.Title 72 86
-      Draw-Text $g "주가는 결과이고, 수급은 그 결과를 만든 돈의 흐름입니다." 96 532 780 82 (Font-Sans 32 "Regular") $card.Muted
-      Draw-FlowActors $g $card 116 660
-      Draw-QuestionRow $g $card "누가 사고 있는가" 116 894
-      Draw-QuestionRow $g $card "누가 빠지고 있는가" 116 958
-      Draw-QuestionRow $g $card "그 수급이 가격을 지지하는가" 116 1022
+      Draw-Text $g "주가는 결과이고, 수급은 그 결과를 만든 돈의 흐름입니다." 150 532 740 82 (Font-Sans 31 "Regular") $card.Muted
+      Draw-FlowActors $g $card 156 660
+      Draw-QuestionRow $g $card "누가 사고 있는가" 156 894
+      Draw-QuestionRow $g $card "누가 빠지고 있는가" 156 958
+      Draw-QuestionRow $g $card "그 수급이 가격을 지지하는가" 156 1022
     }
     "dashboard" {
       Draw-Title $g $card 322 $card.Title 70 84
-      Draw-Metric $g $card "거래일 장기 수급" "20 / 60 / 120" 96 540 398
-      Draw-Metric $g $card "누적 순매수·순매도" "외국인 + 기관" 546 540 398
-      Draw-Metric $g $card "잔여 흐름 추정" "개인 / 기타" 96 684 398
-      Draw-Metric $g $card "추세 변화 확인" "외국인 보유율" 546 684 398
-      Draw-BrowserPanel $g $card 156 860 720 220
+      Draw-Metric $g $card "거래일 장기 수급" "20 / 60 / 120" 150 540 346
+      Draw-Metric $g $card "누적 순매수·순매도" "외국인 + 기관" 544 540 346
+      Draw-Metric $g $card "잔여 흐름 추정" "개인 / 기타" 150 684 346
+      Draw-Metric $g $card "추세 변화 확인" "외국인 보유율" 544 684 346
+      Draw-BrowserPanel $g $card 180 860 680 220
     }
     "strategy" {
       Draw-Title $g $card 330 $card.Title 68 82
-      Draw-Text $g "수급 데이터를 판단 가능한 형태로 바꿉니다." 96 526 760 46 (Font-Sans 31 "Regular") $card.Muted
-      Draw-StepRail $g $card 104 650
-      Draw-Metric $g $card "수급 점수 기반" "매수 우위" 112 852 360
-      Draw-Metric $g $card "확인 신호 필요" "조건부 매수" 520 852 360
-      Draw-Text $g "투자 권유가 아닌 수급 기준 기계적 분류" 112 1048 650 40 (Font-Sans 25 "Regular") $card.Muted
+      Draw-Text $g "수급 데이터를 판단 가능한 형태로 바꿉니다." 150 526 740 46 (Font-Sans 31 "Regular") $card.Muted
+      Draw-StepRail $g $card 150 650
+      Draw-Metric $g $card "수급 점수 기반" "매수 우위" 150 852 336
+      Draw-Metric $g $card "확인 신호 필요" "조건부 매수" 554 852 336
+      Draw-Text $g "투자 권유가 아닌 수급 기준 기계적 분류" 150 1048 650 40 (Font-Sans 25 "Regular") $card.Muted
     }
     "links" {
       Draw-Title $g $card 318 $card.Title 68 82
-      Draw-Text $g "소스 코드와 설치용 ZIP은 GitHub에 공개했습니다." 96 506 800 48 (Font-Sans 30 "Regular") $card.Muted
-      Draw-LinkBox $g $card "GitHub" "github.com/cdsassj00/redefine-browser-02" 96 620 "#111827"
-      Draw-LinkBox $g $card "CDSA" "cdsa.kr" 96 792 $card.Accent
-      Draw-Line $g $card.Line 96 972 952 972 2
-      Draw-Text $g "AI·데이터 교육과 바이브 코딩" 96 1016 720 44 (Font-Sans 34 "Bold") $card.Ink
-      Draw-Text $g "현장에서 바로 쓰는 도구 제작까지" 96 1064 720 38 (Font-Sans 27 "Regular") $card.Muted
+      Draw-Text $g "소스 코드와 설치용 ZIP은 GitHub에 공개했습니다." 150 506 740 48 (Font-Sans 29 "Regular") $card.Muted
+      Draw-LinkBox $g $card "GitHub" "github.com/cdsassj00/redefine-browser-02" 150 620 "#111827"
+      Draw-LinkBox $g $card "CDSA" "cdsa.kr" 150 792 $card.Accent
+      Draw-Line $g $card.Line 150 972 890 972 2
+      Draw-Text $g "AI·데이터 교육과 바이브 코딩" 150 1016 700 44 (Font-Sans 33 "Bold") $card.Ink
+      Draw-Text $g "현장에서 바로 쓰는 도구 제작까지" 150 1064 700 38 (Font-Sans 27 "Regular") $card.Muted
     }
   }
 
@@ -360,7 +362,16 @@ foreach ($card in $cards) {
   $target.Save($safePath, [System.Drawing.Imaging.ImageFormat]::Png)
   $target.Dispose()
   $source.Dispose()
+
+  $source3x4 = [System.Drawing.Bitmap]::FromFile($fullPath)
+  $crop3x4 = [System.Drawing.Rectangle]::new(34, 0, 1012, 1350)
+  $target3x4 = $source3x4.Clone($crop3x4, $source3x4.PixelFormat)
+  $gridPath = Join-Path $out3x4 $fileName
+  $target3x4.Save($gridPath, [System.Drawing.Imaging.ImageFormat]::Png)
+  $target3x4.Dispose()
+  $source3x4.Dispose()
 }
 
 Write-Output "Generated 4:5 cards: $out4x5"
 Write-Output "Generated 1:1 safe crops: $out1x1"
+Write-Output "Generated 3:4 grid previews: $out3x4"
