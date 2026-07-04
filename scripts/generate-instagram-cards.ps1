@@ -13,15 +13,37 @@ $out1x1 = Join-Path $out4x5 "safe-crop-1x1"
 New-Item -ItemType Directory -Force -Path $out4x5 | Out-Null
 New-Item -ItemType Directory -Force -Path $out1x1 | Out-Null
 
-function ColorFromHex([string]$hex) {
+$script:FontCollection = [System.Drawing.Text.PrivateFontCollection]::new()
+foreach ($fontPath in @(
+  "C:\Windows\Fonts\NotoSansKR-Regular.ttf",
+  "C:\Windows\Fonts\NotoSansKR-Medium.ttf",
+  "C:\Windows\Fonts\NotoSansKR-Bold.ttf"
+)) {
+  if (Test-Path -LiteralPath $fontPath) {
+    $script:FontCollection.AddFontFile($fontPath)
+  }
+}
+
+$script:SansFamily = $script:FontCollection.Families | Where-Object { $_.Name -eq "Noto Sans KR" } | Select-Object -First 1
+if (-not $script:SansFamily) {
+  $script:SansFamily = [System.Drawing.FontFamily]::new("Malgun Gothic")
+}
+
+function Color-Hex([string]$hex) {
   return [System.Drawing.ColorTranslator]::FromHtml($hex)
 }
 
-function New-Font([float]$size, [System.Drawing.FontStyle]$style = [System.Drawing.FontStyle]::Regular) {
-  return [System.Drawing.Font]::new("Malgun Gothic", $size, $style, [System.Drawing.GraphicsUnit]::Pixel)
+function Color-Alpha([int]$alpha, [string]$hex) {
+  $base = Color-Hex $hex
+  return [System.Drawing.Color]::FromArgb($alpha, $base.R, $base.G, $base.B)
 }
 
-function New-RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
+function Font-Sans([float]$size, [string]$weight = "Regular") {
+  $style = if ($weight -eq "Bold") { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
+  return [System.Drawing.Font]::new($script:SansFamily, $size, $style, [System.Drawing.GraphicsUnit]::Pixel)
+}
+
+function Path-RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
   $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
   $d = $r * 2
   $path.AddArc($x, $y, $d, $d, 180, 90)
@@ -32,23 +54,33 @@ function New-RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
   return $path
 }
 
-function Fill-RoundRect($g, [System.Drawing.Brush]$brush, [float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
-  $path = New-RoundRect $x $y $w $h $r
+function Fill-Round($g, [System.Drawing.Color]$color, [float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
+  $brush = [System.Drawing.SolidBrush]::new($color)
+  $path = Path-RoundRect $x $y $w $h $r
   $g.FillPath($brush, $path)
   $path.Dispose()
+  $brush.Dispose()
 }
 
-function Stroke-RoundRect($g, [System.Drawing.Pen]$pen, [float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
-  $path = New-RoundRect $x $y $w $h $r
+function Stroke-Round($g, [System.Drawing.Color]$color, [float]$x, [float]$y, [float]$w, [float]$h, [float]$r, [float]$width = 2) {
+  $pen = [System.Drawing.Pen]::new($color, $width)
+  $path = Path-RoundRect $x $y $w $h $r
   $g.DrawPath($pen, $path)
   $path.Dispose()
+  $pen.Dispose()
 }
 
-function Draw-Text($g, [string]$text, [float]$x, [float]$y, [float]$w, [float]$h, $font, [string]$color, [string]$align = "Near") {
-  $brush = [System.Drawing.SolidBrush]::new((ColorFromHex $color))
-  $format = [System.Drawing.StringFormat]::new()
+function Fill-Rect($g, [string]$hex, [float]$x, [float]$y, [float]$w, [float]$h) {
+  $brush = [System.Drawing.SolidBrush]::new((Color-Hex $hex))
+  $g.FillRectangle($brush, $x, $y, $w, $h)
+  $brush.Dispose()
+}
+
+function Draw-Text($g, [string]$text, [float]$x, [float]$y, [float]$w, [float]$h, $font, [string]$hex, [string]$align = "Near", [string]$valign = "Near") {
+  $brush = [System.Drawing.SolidBrush]::new((Color-Hex $hex))
+  $format = [System.Drawing.StringFormat]::new([System.Drawing.StringFormatFlags]::NoClip)
   $format.Alignment = [System.Drawing.StringAlignment]::$align
-  $format.LineAlignment = [System.Drawing.StringAlignment]::Near
+  $format.LineAlignment = [System.Drawing.StringAlignment]::$valign
   $format.Trimming = [System.Drawing.StringTrimming]::EllipsisWord
   $rect = [System.Drawing.RectangleF]::new($x, $y, $w, $h)
   $g.DrawString($text, $font, $brush, $rect, $format)
@@ -56,203 +88,235 @@ function Draw-Text($g, [string]$text, [float]$x, [float]$y, [float]$w, [float]$h
   $brush.Dispose()
 }
 
-function Draw-Lines($g, [string[]]$lines, [float]$x, [float]$y, [float]$w, [float]$lineHeight, $font, [string]$color, [string]$align = "Near") {
+function Draw-Lines($g, [string[]]$lines, [float]$x, [float]$y, [float]$w, [float]$lineHeight, $font, [string]$hex) {
   for ($i = 0; $i -lt $lines.Count; $i++) {
-    Draw-Text $g $lines[$i] $x ($y + $i * $lineHeight) $w $lineHeight $font $color $align
+    Draw-Text $g $lines[$i] $x ($y + $i * $lineHeight) $w $lineHeight $font $hex
   }
 }
 
-function Draw-Chip($g, [string]$text, [float]$x, [float]$y, [float]$w, [string]$bg, [string]$fg) {
-  $brush = [System.Drawing.SolidBrush]::new((ColorFromHex $bg))
-  Fill-RoundRect $g $brush $x $y $w 54 27
+function Draw-Line($g, [string]$hex, [float]$x1, [float]$y1, [float]$x2, [float]$y2, [float]$width = 2) {
+  $pen = [System.Drawing.Pen]::new((Color-Hex $hex), $width)
+  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $g.DrawLine($pen, $x1, $y1, $x2, $y2)
+  $pen.Dispose()
+}
+
+function Draw-Dot($g, [string]$hex, [float]$x, [float]$y, [float]$size) {
+  $brush = [System.Drawing.SolidBrush]::new((Color-Hex $hex))
+  $g.FillEllipse($brush, $x, $y, $size, $size)
   $brush.Dispose()
-  Draw-Text $g $text ($x + 20) ($y + 12) ($w - 40) 30 (New-Font 22 ([System.Drawing.FontStyle]::Bold)) $fg "Center"
+}
+
+function Draw-Background($g, $card) {
+  Fill-Rect $g $card.Bg 0 0 1080 1350
+  Fill-Rect $g $card.Band 0 0 1080 146
+  Fill-Rect $g $card.Band 0 1215 1080 135
+
+  $gridPen = [System.Drawing.Pen]::new((Color-Alpha 40 "#0F172A"), 1)
+  for ($x = 72; $x -lt 1080; $x += 72) {
+    $g.DrawLine($gridPen, $x, 135, $x, 1215)
+  }
+  for ($y = 207; $y -lt 1215; $y += 72) {
+    $g.DrawLine($gridPen, 0, $y, 1080, $y)
+  }
+  $gridPen.Dispose()
+
+  Fill-Round $g (Color-Hex "#FCFDF9") 64 156 952 1038 8
+  Stroke-Round $g (Color-Alpha 50 "#0F172A") 64 156 952 1038 8 1
+  Fill-Rect $g $card.Accent 64 156 8 1038
 }
 
 function Draw-Header($g, $card) {
-  $safeY = 135
-  $muted = $card.Muted
-  $text = $card.Text
-  $accent = $card.Accent
-  Draw-Text $g "$($card.No)/05" 92 ($safeY + 42) 140 42 (New-Font 30 ([System.Drawing.FontStyle]::Bold)) $accent
-  Draw-Text $g "국내증시 수급분석기" 232 ($safeY + 44) 410 38 (New-Font 24 ([System.Drawing.FontStyle]::Bold)) $text
-  Draw-Text $g "CDSA × GitHub" 720 ($safeY + 48) 270 36 (New-Font 22 ([System.Drawing.FontStyle]::Regular)) $muted "Far"
+  Fill-Round $g (Color-Hex $card.AccentSoft) 96 188 104 56 8
+  Draw-Text $g "$($card.No)/05" 96 198 104 36 (Font-Sans 26 "Bold") $card.Accent "Center"
+  Draw-Text $g "국내증시 수급분석기" 226 196 370 36 (Font-Sans 25 "Bold") $card.Ink
+  Draw-Text $g "REDEFINE BROWSER 02" 706 197 258 34 (Font-Sans 18 "Regular") $card.Muted "Far"
+  Draw-Line $g $card.Line 96 274 984 274 2
 }
 
-function Draw-BrowserMock($g, [float]$x, [float]$y, [float]$w, [float]$h, $card) {
-  $panel = [System.Drawing.SolidBrush]::new((ColorFromHex "#FFFFFF"))
-  $line = [System.Drawing.Pen]::new((ColorFromHex "#DDE7E1"), 3)
-  Fill-RoundRect $g $panel $x $y $w $h 34
-  Stroke-RoundRect $g $line $x $y $w $h 34
-  $panel.Dispose()
-  $line.Dispose()
-
-  $dotColors = @("#FF6B6B", "#FDBA2D", "#20C997")
-  for ($i = 0; $i -lt 3; $i++) {
-    $b = [System.Drawing.SolidBrush]::new((ColorFromHex $dotColors[$i]))
-    $g.FillEllipse($b, $x + 32 + $i * 34, $y + 30, 18, 18)
-    $b.Dispose()
-  }
-
-  Draw-Text $g "수급 판정" ($x + 42) ($y + 82) 180 34 (New-Font 24 ([System.Drawing.FontStyle]::Bold)) "#17201B"
-  Draw-Text $g "매수 우위" ($x + 42) ($y + 122) 250 54 (New-Font 40 ([System.Drawing.FontStyle]::Bold)) $card.Accent
-
-  $axisY = $y + $h - 60
-  $chartX = $x + 220
-  $chartScale = [Math]::Max(0.35, [Math]::Min(1.0, ($h - 130) / 230))
-  $axisPen = [System.Drawing.Pen]::new((ColorFromHex "#E7EEE9"), 3)
-  $g.DrawLine($axisPen, $chartX, $axisY, $x + $w - 50, $axisY)
-  $axisPen.Dispose()
-
-  $bars = @(92, 154, 116, 196, 132, 236, 172)
-  for ($i = 0; $i -lt $bars.Count; $i++) {
-    $barX = $chartX + $i * 55
-    $barH = $bars[$i] * $chartScale
-    $c = if ($i % 2 -eq 0) { $card.Accent } else { "#1C64F2" }
-    $b = [System.Drawing.SolidBrush]::new((ColorFromHex $c))
-    Fill-RoundRect $g $b $barX ($axisY - $barH) 36 $barH 14
-    $b.Dispose()
-  }
-
-  $linePen = [System.Drawing.Pen]::new((ColorFromHex "#E03131"), 7)
-  $linePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $linePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $linePen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-  $lineScale = $chartScale * 0.85
-  $points = @(
-    [System.Drawing.PointF]::new($chartX, $axisY - 24 * $lineScale),
-    [System.Drawing.PointF]::new($chartX + 86, $axisY - 58 * $lineScale),
-    [System.Drawing.PointF]::new($chartX + 174, $axisY - 38 * $lineScale),
-    [System.Drawing.PointF]::new($chartX + 270, $axisY - 126 * $lineScale),
-    [System.Drawing.PointF]::new($chartX + 360, $axisY - 104 * $lineScale),
-    [System.Drawing.PointF]::new($chartX + 460, $axisY - 176 * $lineScale)
-  )
-  $g.DrawLines($linePen, $points)
-  $linePen.Dispose()
+function Draw-Title($g, $card, [float]$y, [string[]]$title, [float]$size = 72, [float]$lineHeight = 86) {
+  Draw-Lines $g $title 96 $y 850 $lineHeight (Font-Sans $size "Bold") $card.Ink
+  $afterY = $y + ($title.Count * $lineHeight) + 8
+  Draw-Line $g $card.Accent 96 $afterY 196 $afterY 7
 }
 
-function Draw-MoneyFlow($g, [float]$x, [float]$y, $card) {
-  $colors = @($card.Accent, "#1C64F2", "#E03131")
-  $labels = @("외국인", "기관", "개인")
-  for ($i = 0; $i -lt 3; $i++) {
-    $b = [System.Drawing.SolidBrush]::new((ColorFromHex $colors[$i]))
-    $g.FillEllipse($b, $x + $i * 220, $y, 150, 150)
-    $b.Dispose()
-    Draw-Text $g $labels[$i] ($x + $i * 220) ($y + 52) 150 44 (New-Font 30 ([System.Drawing.FontStyle]::Bold)) "#FFFFFF" "Center"
-    if ($i -lt 2) {
-      $pen = [System.Drawing.Pen]::new((ColorFromHex "#9AA6A0"), 8)
-      $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::ArrowAnchor
-      $g.DrawLine($pen, $x + 160 + $i * 220, $y + 75, $x + 210 + $i * 220, $y + 75)
-      $pen.Dispose()
+function Draw-BrowserPanel($g, $card, [float]$x, [float]$y, [float]$w, [float]$h) {
+  Fill-Round $g (Color-Alpha 24 "#0F172A") ($x + 10) ($y + 12) $w $h 8
+  Fill-Round $g (Color-Hex "#FFFFFF") $x $y $w $h 8
+  Stroke-Round $g (Color-Hex $card.Line) $x $y $w $h 8 2
+
+  Draw-Dot $g "#EF4444" ($x + 30) ($y + 28) 14
+  Draw-Dot $g "#F59E0B" ($x + 56) ($y + 28) 14
+  Draw-Dot $g $card.Accent ($x + 82) ($y + 28) 14
+
+  if ($h -lt 260) {
+    Draw-Text $g "수급 그래프" ($x + 30) ($y + 70) 180 30 (Font-Sans 22 "Bold") $card.Ink
+    $chartX = $x + 220
+    $axisY = $y + $h - 42
+    Draw-Line $g "#DCE5DF" $chartX $axisY ($x + $w - 42) $axisY 3
+    $bars = @(76, 116, 94, 150, 112, 172, 132)
+    for ($i = 0; $i -lt $bars.Count; $i++) {
+      $barX = $chartX + $i * 52
+      $barH = $bars[$i] * 0.58
+      $color = if ($i % 2 -eq 0) { $card.Accent } else { "#2563EB" }
+      Fill-Round $g (Color-Hex $color) $barX ($axisY - $barH) 32 $barH 8
     }
+    $pen = [System.Drawing.Pen]::new((Color-Hex "#EF4444"), 7)
+    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    $points = @(
+      [System.Drawing.PointF]::new($chartX, $axisY - 22),
+      [System.Drawing.PointF]::new($chartX + 84, $axisY - 46),
+      [System.Drawing.PointF]::new($chartX + 168, $axisY - 34),
+      [System.Drawing.PointF]::new($chartX + 252, $axisY - 82),
+      [System.Drawing.PointF]::new($chartX + 336, $axisY - 70),
+      [System.Drawing.PointF]::new($chartX + 420, $axisY - 112)
+    )
+    $g.DrawLines($pen, $points)
+    $pen.Dispose()
+    return
   }
+
+  Draw-Text $g "수급 판정" ($x + 30) ($y + 74) 160 32 (Font-Sans 23 "Bold") $card.Ink
+  Draw-Text $g "매수 우위" ($x + 30) ($y + 110) 245 58 (Font-Sans 43 "Bold") $card.Accent
+
+  $chartX = $x + 250
+  $axisY = $y + $h - 72
+  Draw-Line $g "#DCE5DF" $chartX $axisY ($x + $w - 42) $axisY 3
+  $bars = @(84, 128, 104, 168, 120, 208, 154)
+  for ($i = 0; $i -lt $bars.Count; $i++) {
+    $barX = $chartX + $i * 48
+    $barH = $bars[$i] * [Math]::Min(1, ($h - 118) / 220)
+    $color = if ($i % 2 -eq 0) { $card.Accent } else { "#2563EB" }
+    Fill-Round $g (Color-Hex $color) $barX ($axisY - $barH) 30 $barH 8
+  }
+
+  $pen = [System.Drawing.Pen]::new((Color-Hex "#EF4444"), 7)
+  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+  $points = @(
+    [System.Drawing.PointF]::new($chartX, $axisY - 18),
+    [System.Drawing.PointF]::new($chartX + 84, $axisY - 48),
+    [System.Drawing.PointF]::new($chartX + 168, $axisY - 34),
+    [System.Drawing.PointF]::new($chartX + 252, $axisY - 104),
+    [System.Drawing.PointF]::new($chartX + 336, $axisY - 86),
+    [System.Drawing.PointF]::new($chartX + 420, $axisY - 140)
+  )
+  $g.DrawLines($pen, $points)
+  $pen.Dispose()
 }
 
-function Draw-Steps($g, [float]$x, [float]$y, $card) {
-  $steps = @("표", "그래프", "점수", "전략")
-  for ($i = 0; $i -lt $steps.Count; $i++) {
-    $boxX = $x + $i * 210
-    $brush = [System.Drawing.SolidBrush]::new((ColorFromHex $(if ($i -eq 3) { $card.Accent } else { "#FFFFFF" })))
-    Fill-RoundRect $g $brush $boxX $y 164 126 30
-    $brush.Dispose()
-    $pen = [System.Drawing.Pen]::new((ColorFromHex "#DDE7E1"), 3)
-    Stroke-RoundRect $g $pen $boxX $y 164 126 30
-    $pen.Dispose()
-    Draw-Text $g $steps[$i] $boxX ($y + 39) 164 50 (New-Font 38 ([System.Drawing.FontStyle]::Bold)) $(if ($i -eq 3) { "#FFFFFF" } else { "#17201B" }) "Center"
-    if ($i -lt $steps.Count - 1) {
-      $arrow = [System.Drawing.Pen]::new((ColorFromHex "#7B8781"), 6)
-      $arrow.EndCap = [System.Drawing.Drawing2D.LineCap]::ArrowAnchor
-      $g.DrawLine($arrow, $boxX + 174, $y + 63, $boxX + 204, $y + 63)
+function Draw-Metric($g, $card, [string]$label, [string]$value, [float]$x, [float]$y, [float]$w = 392) {
+  Fill-Round $g (Color-Hex "#FFFFFF") $x $y $w 112 8
+  Stroke-Round $g (Color-Hex $card.Line) $x $y $w 112 8 2
+  Draw-Text $g $value ($x + 24) ($y + 24) ($w - 48) 40 (Font-Sans 33 "Bold") $card.Ink
+  Draw-Text $g $label ($x + 24) ($y + 67) ($w - 48) 30 (Font-Sans 21 "Regular") $card.Muted
+}
+
+function Draw-QuestionRow($g, $card, [string]$text, [float]$x, [float]$y) {
+  Fill-Rect $g $card.Accent $x ($y + 10) 18 18
+  Draw-Text $g $text ($x + 38) $y 640 42 (Font-Sans 29 "Bold") $card.Ink
+}
+
+function Draw-FlowActors($g, $card, [float]$x, [float]$y) {
+  $items = @(
+    @("외국인", $card.Accent),
+    @("기관", "#2563EB"),
+    @("개인", "#EF4444")
+  )
+  for ($i = 0; $i -lt $items.Count; $i++) {
+    $cx = $x + $i * 260
+    Fill-Round $g (Color-Hex "#FFFFFF") $cx $y 186 176 8
+    Stroke-Round $g (Color-Hex $card.Line) $cx $y 186 176 8 2
+    Fill-Rect $g $items[$i][1] $cx $y 186 8
+    Draw-Text $g $items[$i][0] $cx ($y + 58) 186 50 (Font-Sans 36 "Bold") $items[$i][1] "Center"
+    Draw-Text $g "순매수/순매도" $cx ($y + 112) 186 30 (Font-Sans 20 "Regular") $card.Muted "Center"
+    if ($i -lt 2) {
+      Draw-Line $g "#9AA6A0" ($cx + 204) ($y + 88) ($cx + 246) ($y + 88) 5
+      $arrow = [System.Drawing.Pen]::new((Color-Hex "#9AA6A0"), 5)
+      $arrow.EndCap = [System.Drawing.Drawing2D.LineCap]::Triangle
+      $g.DrawLine($arrow, $cx + 226, $y + 88, $cx + 246, $y + 88)
       $arrow.Dispose()
     }
   }
 }
 
+function Draw-StepRail($g, $card, [float]$x, [float]$y) {
+  $steps = @("표", "그래프", "점수", "전략")
+  Draw-Line $g "#CBD5CF" ($x + 82) ($y + 68) ($x + 748) ($y + 68) 5
+  for ($i = 0; $i -lt $steps.Count; $i++) {
+    $cx = $x + $i * 222
+    $fill = if ($i -eq 3) { $card.Accent } else { "#FFFFFF" }
+    $fg = if ($i -eq 3) { "#FFFFFF" } else { $card.Ink }
+    Fill-Round $g (Color-Hex $fill) $cx $y 164 136 8
+    Stroke-Round $g (Color-Hex $(if ($i -eq 3) { $card.Accent } else { $card.Line })) $cx $y 164 136 8 2
+    Draw-Text $g ("0" + ($i + 1)) ($cx + 18) ($y + 18) 50 26 (Font-Sans 18 "Bold") $(if ($i -eq 3) { "#DDF7E8" } else { $card.Accent })
+    Draw-Text $g $steps[$i] $cx ($y + 52) 164 50 (Font-Sans 36 "Bold") $fg "Center"
+  }
+}
+
+function Draw-LinkBox($g, $card, [string]$label, [string]$url, [float]$x, [float]$y, [string]$accent) {
+  Fill-Round $g (Color-Hex "#FFFFFF") $x $y 856 126 8
+  Stroke-Round $g (Color-Hex $card.Line) $x $y 856 126 8 2
+  Fill-Rect $g $accent $x $y 8 126
+  Draw-Text $g $label ($x + 34) ($y + 23) 180 28 (Font-Sans 21 "Bold") $accent
+  Draw-Text $g $url ($x + 34) ($y + 60) 770 44 (Font-Sans 31 "Bold") $card.Ink
+}
+
 function Draw-Card([hashtable]$card, [string]$path) {
-  $w = 1080
-  $h = 1350
-  $bmp = [System.Drawing.Bitmap]::new($w, $h)
+  $bmp = [System.Drawing.Bitmap]::new(1080, 1350)
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
   $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+  $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
 
-  $bg1 = ColorFromHex $card.Bg1
-  $bg2 = ColorFromHex $card.Bg2
-  $grad = [System.Drawing.Drawing2D.LinearGradientBrush]::new([System.Drawing.Rectangle]::new(0, 0, $w, $h), $bg1, $bg2, 90)
-  $g.FillRectangle($grad, 0, 0, $w, $h)
-  $grad.Dispose()
-
-  $safeY = 135
-  $safeBrush = [System.Drawing.SolidBrush]::new((ColorFromHex "#F8FBF9"))
-  Fill-RoundRect $g $safeBrush 54 ($safeY + 20) 972 1040 42
-  $safeBrush.Dispose()
-
+  Draw-Background $g $card
   Draw-Header $g $card
 
   switch ($card.Mode) {
     "cover" {
-      Draw-Lines $g $card.Title 92 332 896 92 (New-Font 76 ([System.Drawing.FontStyle]::Bold)) $card.Text "Near"
-      Draw-Text $g $card.Subtitle 96 542 760 52 (New-Font 34 ([System.Drawing.FontStyle]::Regular)) $card.Muted
-      Draw-BrowserMock $g 96 668 650 368 $card
-      Draw-Chip $g "국내 주식 전용" 96 1080 232 "#E9F7EF" $card.Accent
-      Draw-Chip $g "GitHub 공개" 350 1080 210 "#EEF2FF" "#1C64F2"
-      Draw-Chip $g "CDSA.kr" 582 1080 170 "#FFF4E8" "#F97316"
+      Draw-Text $g "NAVER FINANCE DATA TOOL" 96 318 520 28 (Font-Sans 18 "Bold") $card.Accent
+      Draw-Title $g $card 360 $card.Title 78 92
+      Draw-Text $g "120거래일 수급을 읽는 Chrome 확장프로그램" 96 560 770 44 (Font-Sans 30 "Regular") $card.Muted
+      Draw-BrowserPanel $g $card 112 675 770 340
+      Draw-Text $g "GitHub 공개 · CDSA.kr" 112 1082 500 34 (Font-Sans 24 "Bold") $card.Ink
+      Draw-Text $g "외국인 · 기관 · 개인/기타" 706 1082 250 34 (Font-Sans 22 "Regular") $card.Muted "Far"
     }
     "why" {
-      Draw-Lines $g $card.Title 92 318 896 82 (New-Font 66 ([System.Drawing.FontStyle]::Bold)) $card.Text
-      Draw-Text $g "주가는 결과이고, 수급은 그 가격을 만든 돈의 흐름입니다." 96 500 840 94 (New-Font 34 ([System.Drawing.FontStyle]::Regular)) $card.Muted
-      Draw-MoneyFlow $g 124 650 $card
-      $items = @("누가 사고 있는가", "누가 빠지고 있는가", "그 수급이 가격을 지지하는가")
-      for ($i = 0; $i -lt $items.Count; $i++) {
-        Draw-Chip $g $items[$i] 110 (865 + $i * 72) 430 "#FFFFFF" $card.Text
-      }
+      Draw-Title $g $card 330 $card.Title 72 86
+      Draw-Text $g "주가는 결과이고, 수급은 그 결과를 만든 돈의 흐름입니다." 96 532 780 82 (Font-Sans 32 "Regular") $card.Muted
+      Draw-FlowActors $g $card 116 660
+      Draw-QuestionRow $g $card "누가 사고 있는가" 116 894
+      Draw-QuestionRow $g $card "누가 빠지고 있는가" 116 958
+      Draw-QuestionRow $g $card "그 수급이 가격을 지지하는가" 116 1022
     }
     "dashboard" {
-      Draw-Lines $g $card.Title 92 318 896 76 (New-Font 62 ([System.Drawing.FontStyle]::Bold)) $card.Text
-      $metrics = @(
-        @("20/60/120", "거래일"),
-        @("외국인+기관", "누적 흐름"),
-        @("개인/기타", "잔여 추정"),
-        @("보유율", "변화 추적")
-      )
-      for ($i = 0; $i -lt $metrics.Count; $i++) {
-        $x = 96 + ($i % 2) * 438
-        $y = 518 + [math]::Floor($i / 2) * 150
-        $b = [System.Drawing.SolidBrush]::new((ColorFromHex "#FFFFFF"))
-        Fill-RoundRect $g $b $x $y 390 116 28
-        $b.Dispose()
-        Draw-Text $g $metrics[$i][0] ($x + 26) ($y + 22) 338 42 (New-Font 31 ([System.Drawing.FontStyle]::Bold)) $card.Text
-        Draw-Text $g $metrics[$i][1] ($x + 26) ($y + 66) 338 32 (New-Font 23 ([System.Drawing.FontStyle]::Regular)) $card.Muted
-      }
-      Draw-BrowserMock $g 156 850 660 240 $card
+      Draw-Title $g $card 322 $card.Title 70 84
+      Draw-Metric $g $card "거래일 장기 수급" "20 / 60 / 120" 96 540 398
+      Draw-Metric $g $card "누적 순매수·순매도" "외국인 + 기관" 546 540 398
+      Draw-Metric $g $card "잔여 흐름 추정" "개인 / 기타" 96 684 398
+      Draw-Metric $g $card "추세 변화 확인" "외국인 보유율" 546 684 398
+      Draw-BrowserPanel $g $card 156 860 720 220
     }
     "strategy" {
-      Draw-Lines $g $card.Title 92 320 896 76 (New-Font 60 ([System.Drawing.FontStyle]::Bold)) $card.Text
-      Draw-Text $g "수급 데이터를 판단 가능한 형태로 바꿉니다." 96 488 860 56 (New-Font 32 ([System.Drawing.FontStyle]::Regular)) $card.Muted
-      Draw-Steps $g 98 630 $card
-      $labels = @("매수 우위", "조건부 매수", "관망", "매도 우위")
-      for ($i = 0; $i -lt $labels.Count; $i++) {
-        Draw-Chip $g $labels[$i] (102 + ($i % 2) * 360) (846 + [math]::Floor($i / 2) * 78) 300 "#FFFFFF" $card.Text
-      }
-      Draw-Text $g "투자 권유가 아닌 수급 기준 기계적 분류" 104 1040 720 42 (New-Font 25 ([System.Drawing.FontStyle]::Regular)) $card.Muted
+      Draw-Title $g $card 330 $card.Title 68 82
+      Draw-Text $g "수급 데이터를 판단 가능한 형태로 바꿉니다." 96 526 760 46 (Font-Sans 31 "Regular") $card.Muted
+      Draw-StepRail $g $card 104 650
+      Draw-Metric $g $card "수급 점수 기반" "매수 우위" 112 852 360
+      Draw-Metric $g $card "확인 신호 필요" "조건부 매수" 520 852 360
+      Draw-Text $g "투자 권유가 아닌 수급 기준 기계적 분류" 112 1048 650 40 (Font-Sans 25 "Regular") $card.Muted
     }
     "links" {
-      Draw-Lines $g $card.Title 92 314 896 78 (New-Font 64 ([System.Drawing.FontStyle]::Bold)) $card.Text
-      Draw-Text $g "소스 코드와 설치용 ZIP은 GitHub에 공개했습니다." 96 492 840 52 (New-Font 32 ([System.Drawing.FontStyle]::Regular)) $card.Muted
-      $boxes = @(
-        @("GitHub", "github.com/cdsassj00/redefine-browser-02", "#101820"),
-        @("CDSA", "cdsa.kr", $card.Accent)
-      )
-      for ($i = 0; $i -lt $boxes.Count; $i++) {
-        $y = 610 + $i * 168
-        $b = [System.Drawing.SolidBrush]::new((ColorFromHex "#FFFFFF"))
-        Fill-RoundRect $g $b 96 $y 888 128 28
-        $b.Dispose()
-        Draw-Text $g $boxes[$i][0] 132 ($y + 24) 190 32 (New-Font 25 ([System.Drawing.FontStyle]::Bold)) $boxes[$i][2]
-        Draw-Text $g $boxes[$i][1] 132 ($y + 62) 790 44 (New-Font 32 ([System.Drawing.FontStyle]::Bold)) $card.Text
-      }
-      Draw-Text $g "AI·데이터 교육과 바이브 코딩, 현장에서 바로 쓰는 도구 제작" 106 955 826 96 (New-Font 31 ([System.Drawing.FontStyle]::Regular)) $card.Text
-      Draw-Text $g "한국데이터사이언티스트협회(CDSA)" 106 1065 826 40 (New-Font 25 ([System.Drawing.FontStyle]::Bold)) $card.Muted
+      Draw-Title $g $card 318 $card.Title 68 82
+      Draw-Text $g "소스 코드와 설치용 ZIP은 GitHub에 공개했습니다." 96 506 800 48 (Font-Sans 30 "Regular") $card.Muted
+      Draw-LinkBox $g $card "GitHub" "github.com/cdsassj00/redefine-browser-02" 96 620 "#111827"
+      Draw-LinkBox $g $card "CDSA" "cdsa.kr" 96 792 $card.Accent
+      Draw-Line $g $card.Line 96 972 952 972 2
+      Draw-Text $g "AI·데이터 교육과 바이브 코딩" 96 1016 720 44 (Font-Sans 34 "Bold") $card.Ink
+      Draw-Text $g "현장에서 바로 쓰는 도구 제작까지" 96 1064 720 38 (Font-Sans 27 "Regular") $card.Muted
     }
   }
 
@@ -263,23 +327,23 @@ function Draw-Card([hashtable]$card, [string]$path) {
 
 $cards = @(
   @{
-    No = "01"; Mode = "cover"; Accent = "#03C75A"; Text = "#17201B"; Muted = "#5C6963"; Bg1 = "#DFF7EA"; Bg2 = "#F4F7F6";
-    Title = @("가격보다 먼저", "돈의 흐름을 봅니다"); Subtitle = "네이버 증권 기반 Chrome 확장프로그램"
+    No = "01"; Mode = "cover"; Accent = "#00B050"; AccentSoft = "#E6F7EE"; Ink = "#101814"; Muted = "#5E6C66"; Line = "#DDE6E0"; Bg = "#F2F6F0"; Band = "#E0F2E8";
+    Title = @("가격보다 먼저", "돈의 흐름을 봅니다")
   },
   @{
-    No = "02"; Mode = "why"; Accent = "#F97316"; Text = "#171717"; Muted = "#626B66"; Bg1 = "#FFF3E8"; Bg2 = "#F5FAF6";
+    No = "02"; Mode = "why"; Accent = "#E86100"; AccentSoft = "#FFF0E4"; Ink = "#151515"; Muted = "#636D68"; Line = "#E2E5DD"; Bg = "#F7F3EC"; Band = "#FDE7D2";
     Title = @("왜 수급분석이", "중요할까?")
   },
   @{
-    No = "03"; Mode = "dashboard"; Accent = "#03C75A"; Text = "#17201B"; Muted = "#637069"; Bg1 = "#E8F7FF"; Bg2 = "#F7FBF8";
+    No = "03"; Mode = "dashboard"; Accent = "#0EA5A4"; AccentSoft = "#E4F7F5"; Ink = "#10201D"; Muted = "#64706B"; Line = "#DCE6E2"; Bg = "#EFF6F5"; Band = "#DDEFEF";
     Title = @("5일 표에서", "120거래일 대시보드로")
   },
   @{
-    No = "04"; Mode = "strategy"; Accent = "#1C64F2"; Text = "#141A26"; Muted = "#667085"; Bg1 = "#EEF4FF"; Bg2 = "#F7F8F6";
+    No = "04"; Mode = "strategy"; Accent = "#2563EB"; AccentSoft = "#E9F0FF"; Ink = "#111827"; Muted = "#667085"; Line = "#DDE3EC"; Bg = "#F2F5FA"; Band = "#E3EBFA";
     Title = @("표에서 끝내지 않고", "전략까지")
   },
   @{
-    No = "05"; Mode = "links"; Accent = "#03C75A"; Text = "#142019"; Muted = "#626E68"; Bg1 = "#EAF7EF"; Bg2 = "#FFF7ED";
+    No = "05"; Mode = "links"; Accent = "#00B050"; AccentSoft = "#E6F7EE"; Ink = "#101814"; Muted = "#606E68"; Line = "#DDE6E0"; Bg = "#F5F4EC"; Band = "#E6F3E9";
     Title = @("GitHub에서 받고", "CDSA에서 배웁니다")
   }
 )
