@@ -897,7 +897,7 @@ function copySummary() {
   const strategy = buildTradingStrategy(report.rows, period);
   const latest = report.rows[0];
   const lines = [
-    `[${report.stock.name} ${report.stock.code}] 네이버 수급 분석`,
+    `[${report.stock.name} ${report.stock.code}] 국내증시 수급분석`,
     `${period.days}거래일 판정: ${verdict}, 점수 ${period.score}`,
     `수급 기준 의견: ${strategy.opinion} / 실행: ${strategy.action}`,
     `최근일 ${latest.date}: 외국인 ${signed(latest.foreign)}, 기관 ${signed(latest.institution)}, 개인/기타 ${signed(latest.individual)}`,

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>네이버 증권 수급 분석기</title>
+    <title>국내증시 수급분석기</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -11,15 +11,15 @@
       <header class="topbar">
         <div class="brand-mark" aria-hidden="true">N</div>
         <div>
-          <h1>수급 분석기</h1>
-          <p>장기 수급 · 주체별 흐름 · 가격 괴리</p>
+          <h1>국내증시 수급분석기</h1>
+          <p>외국인 · 기관 · 개인 흐름과 가격 괴리</p>
         </div>
       </header>
 
-      <section class="search-panel" aria-label="종목 검색">
+      <section class="search-panel" aria-label="국내 종목 검색">
         <form id="searchForm" class="search-form">
-          <label class="sr-only" for="stockQuery">종목명 또는 종목코드</label>
-          <input id="stockQuery" name="stockQuery" type="search" autocomplete="off" placeholder="종목명 또는 코드 입력" />
+          <label class="sr-only" for="stockQuery">국내 종목명 또는 종목코드</label>
+          <input id="stockQuery" name="stockQuery" type="search" autocomplete="off" placeholder="국내 종목명 또는 코드 입력" />
           <select id="rangeSelect" aria-label="수집 기간">
             <option value="20">20거래일</option>
             <option value="60">60거래일</option>
@@ -33,7 +33,7 @@
         </div>
       </section>
 
-      <section id="status" class="status" role="status">종목을 입력하고 분석을 눌러주세요.</section>
+      <section id="status" class="status" role="status">국내 종목을 입력하고 분석을 눌러주세요.</section>
       <section id="candidates" class="candidate-list" aria-label="검색 결과" hidden></section>
 
       <section id="result" class="result" hidden>
